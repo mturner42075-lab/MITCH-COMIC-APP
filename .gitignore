@@ -1,0 +1,30 @@
+# Node / React
+node_modules/
+.cache/
+frontend/node_modules/.cache/
+
+# Logs
+*.log
+frontend/web.log
+backend/api.log
+
+# Local env / secrets
+backend/.env
+frontend/.env
+
+# Local handoff and import dumps
+CLAUDE_HANDOFF.*
+import.csv
+import.xml
+
+# PIDs
+.pids/
+
+# Playwright artifacts
+.playwright-cli/
+
+# OS
+.DS_Store
+
+# Build output
+frontend/build/

@@ -1,0 +1,10 @@
+{
+  "name": "noir-collect",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bash ./scripts/dev.sh",
+    "stop": "bash ./scripts/stop.sh",
+    "enrich": "node ./scripts/bulk-enrich.js"
+  }
+}
