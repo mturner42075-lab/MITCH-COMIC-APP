@@ -75,7 +75,7 @@ Render will run `npm run migrate` on start to apply `backend/schema.sql` automat
 2. Deploy the `build/` folder to GitHub Pages (your existing workflow).
 3. Set the API base URL in the UI once, or append a query string:
    - `https://YOUR_GH_PAGES_URL/?api=https://YOUR_RENDER_URL`
-   - Example: `https://mturner42075-lab.github.io/MST/noir/?api=https://noir-collect-api.onrender.com`
+   - Example: `https://mturner42075-lab.github.io/MITCH-COMIC-APP/?api=https://noir-collect-api.onrender.com`
 
 Notes:
 - The API base is stored in localStorage after the first set.

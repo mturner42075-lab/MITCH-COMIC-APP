@@ -1,6 +1,7 @@
 {
   "name": "noir-collect-web",
   "version": "0.1.0",
+  "homepage": "https://mturner42075-lab.github.io/MITCH-COMIC-APP",
   "private": true,
   "dependencies": {
     "@zxing/library": "^0.21.2",
