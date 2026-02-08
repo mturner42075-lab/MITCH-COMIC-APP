@@ -1,5 +1,7 @@
 -- Comic inventory schema for PostgreSQL
 -- Core fields mirror CLZ-style inventory with open-source metadata capture.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 
 CREATE TYPE signature_status AS ENUM (
   'none',

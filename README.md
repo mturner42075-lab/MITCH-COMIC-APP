@@ -21,7 +21,7 @@ Open-source alternative to CLZ Comics with a Modern Noir interface.
    - API: http://localhost:4000/api/health
 
 ## Environment
-Create `/Users/mitchturner/Documents/New project/backend/.env` (optional):
+Create `/Users/mitchturner/Documents/GitHub/MITCH-COMIC-APP/backend/.env` (optional):
 ```
 PORT=4000
 DATABASE_URL=postgres://noir_user:noir_pass@db:5432/noir_collect
@@ -69,7 +69,7 @@ Render will run `npm run migrate` on start to apply `backend/schema.sql` automat
 ## GitHub Pages (Frontend)
 
 1. Build the frontend:
-   - `cd /Users/mitchturner/Documents/New project/frontend`
+   - `cd /Users/mitchturner/Documents/GitHub/MITCH-COMIC-APP/frontend`
    - `npm install`
    - `npm run build`
 2. Deploy the `build/` folder to GitHub Pages (your existing workflow).
