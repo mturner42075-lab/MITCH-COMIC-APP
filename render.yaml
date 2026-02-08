@@ -1,62 +1,35 @@
 services:
-  # PostgreSQL Database
-  - type: pserv
-    name: noir-collect-db
-    env: docker
-    plan: free
-    region: oregon
-    disk:
-      name: noir-collect-data
-      mountPath: /var/lib/postgresql/data
-      sizeGB: 1
-    ipAllowList: []
-
-  # Backend API Server
   - type: web
     name: noir-collect-api
     env: node
-    region: oregon
     plan: free
+    rootDir: backend
     buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /api/health
+    startCommand: npm run migrate && node src/index.js
     envVars:
-      - key: NODE_ENV
-        value: production
+      - key: NODE_VERSION
+        value: 20
       - key: PORT
-        value: 3000
+        value: 4000
       - key: DATABASE_URL
         fromDatabase:
           name: noir-collect-db
           property: connectionString
       - key: COMICVINE_API_KEY
-        sync: false  # Set this in Render dashboard
-      - key: JWT_SECRET
-        generateValue: true
-      - key: CORS_ORIGIN
-        value: https://noir-collect.onrender.com
-    
-  # Frontend Static Site
-  - type: web
-    name: noir-collect
-    env: static
-    region: oregon
-    plan: free
-    buildCommand: npm run build:frontend
-    staticPublishPath: ./dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://noir-collect-api.onrender.com
-      - key: NODE_ENV
-        value: production
+        sync: false
+      - key: GOOGLE_BOOKS_API_KEY
+        sync: false
+      - key: OPEN_LIBRARY_API
+        value: https://openlibrary.org
+      - key: METRON_BASE
+        value: https://metron.cloud/api
+      - key: METRON_USERNAME
+        sync: false
+      - key: METRON_PASSWORD
+        sync: false
+      - key: AUTH_TOKEN
+        sync: false
 
 databases:
   - name: noir-collect-db
-    databaseName: noir_collect
-    user: noir_collect_user
     plan: free
-    region: oregon
