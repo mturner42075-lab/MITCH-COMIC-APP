@@ -79,4 +79,4 @@ Render will run `npm run migrate` on start to apply `backend/schema.sql` automat
 
 Notes:
 - The API base is stored in localStorage after the first set.
-- The Render service URL must include https.
+- The Render service URL must include https. 
