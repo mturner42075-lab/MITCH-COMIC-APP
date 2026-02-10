@@ -692,8 +692,30 @@
     async function fetchComicVine(path, params) {
       const base = "https://comicvine.gamespot.com/api";
       const url = `${base}${path}?${new URLSearchParams(params).toString()}`;
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      return await fetch(proxyUrl);
+      const proxies = [
+        (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
+        (u) => `https://cors.isomorphic-git.org/${u}`
+      ];
+
+      let lastError = "Unknown error";
+      for (const makeUrl of proxies) {
+        const proxyUrl = makeUrl(url);
+        try {
+          const res = await fetch(proxyUrl);
+          if (res.ok) return res;
+          const text = await res.text().catch(() => "");
+          if (text.includes("corsproxy.io") || res.status === 403) {
+            lastError = "Proxy blocked";
+            continue;
+          }
+          lastError = `HTTP ${res.status}`;
+        } catch (err) {
+          lastError = err.message || "Network error";
+        }
+      }
+      throw new Error(`All proxies failed (${lastError}). Try again later.`);
     }
 
     async function enrichCollection() {
