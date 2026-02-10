@@ -789,29 +789,68 @@
         api_key: state.apiKey,
         format: "json",
         resources: "issue",
-        limit: "1",
+        limit: "10",
         field_list: "name,issue_number,cover_date,image,volume,description"
       };
 
-      if (queryFull) {
-        const resFull = await fetchComicVine("/search/", { ...params, query: queryFull });
-        const dataFull = await resFull.json();
-        if (dataFull.error && dataFull.error !== "OK") {
-          throw new Error(dataFull.error);
+      const tryQuery = async (query) => {
+        if (!query) return null;
+        const res = await fetchComicVine("/search/", { ...params, query });
+        const data = await res.json();
+        if (data.error && data.error !== "OK") {
+          throw new Error(data.error);
         }
-        if (dataFull.results && dataFull.results[0]) return dataFull.results[0];
-      }
+        const results = data.results || [];
+        return pickBestMatch(item, results);
+      };
 
-      if (querySeries) {
-        const resSeries = await fetchComicVine("/search/", { ...params, query: querySeries });
-        const dataSeries = await resSeries.json();
-        if (dataSeries.error && dataSeries.error !== "OK") {
-          throw new Error(dataSeries.error);
-        }
-        if (dataSeries.results && dataSeries.results[0]) return dataSeries.results[0];
-      }
-
+      const bestFull = await tryQuery(queryFull);
+      if (bestFull) return bestFull;
+      const bestSeries = await tryQuery(querySeries);
+      if (bestSeries) return bestSeries;
       return null;
+    }
+
+    function pickBestMatch(item, results) {
+      if (!results.length) return null;
+      const targetSeries = normalizeSeries(item.series || "");
+      const targetIssue = normalizeIssue(item.issue || "");
+      let best = null;
+      let bestScore = -1;
+
+      for (const r of results) {
+        const series = normalizeSeries(r.volume?.name || r.name || "");
+        const issue = normalizeIssue(r.issue_number || "");
+        let score = 0;
+
+        if (series === targetSeries) score += 6;
+        if (issue && issue === targetIssue) score += 6;
+        if (series.includes(targetSeries) || targetSeries.includes(series)) score += 2;
+        if (issue && targetIssue && issue[0] === targetIssue[0]) score += 1;
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = r;
+        }
+      }
+
+      return bestScore >= 6 ? best : null;
+    }
+
+    function normalizeSeries(value) {
+      return String(value)
+        .toLowerCase()
+        .replace(/\bvol\.?\s*\d+\b/g, "")
+        .replace(/\([^)]*\)/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    }
+
+    function normalizeIssue(value) {
+      return String(value)
+        .toLowerCase()
+        .replace(/[^0-9a-z]+/g, "")
+        .trim();
     }
 
     function handleCsvFile(event) {
