@@ -336,6 +336,12 @@
         <button id="exportCsv">Export CSV</button>
         <button id="clearCollection" class="secondary">Clear Collection</button>
       </div>
+      <div class="row" style="margin-top:10px;">
+        <label class="badge" style="cursor:pointer;">
+          <input id="strictToggle" type="checkbox" style="margin-right:8px;" />
+          Strict accuracy (no guessing)
+        </label>
+      </div>
       <p class="status" id="enrichStatus">Ready.</p>
       <div class="collection" id="collection"></div>
     </section>
@@ -445,7 +451,8 @@
       collection: storage.get("cv_collection_v1", []),
       csvRows: [],
       csvHeaders: [],
-      activeIndex: null
+      activeIndex: null,
+      strictEnrich: storage.get("cv_strict_enrich", true)
     };
 
     const els = {
@@ -462,6 +469,7 @@
       enrichBtn: document.getElementById("enrichBtn"),
       enrichAllBtn: document.getElementById("enrichAllBtn"),
       enrichStatus: document.getElementById("enrichStatus"),
+      strictToggle: document.getElementById("strictToggle"),
       exportCsv: document.getElementById("exportCsv"),
       clearCollection: document.getElementById("clearCollection"),
       csvInput: document.getElementById("csvInput"),
@@ -486,6 +494,7 @@
     updateApiStatus();
     renderCollection();
     renderStats();
+    els.strictToggle.checked = !!state.strictEnrich;
 
     els.saveKey.addEventListener("click", () => {
       state.apiKey = els.apiKey.value.trim();
@@ -517,6 +526,13 @@
     });
     els.enrichBtn.addEventListener("click", () => enrichCollection());
     els.enrichAllBtn.addEventListener("click", () => enrichAllBatches());
+    els.strictToggle.addEventListener("change", () => {
+      state.strictEnrich = !!els.strictToggle.checked;
+      storage.set("cv_strict_enrich", state.strictEnrich);
+      els.enrichStatus.textContent = state.strictEnrich
+        ? "Strict accuracy enabled."
+        : "Best-guess mode enabled.";
+    });
 
     els.csvInput.addEventListener("change", handleCsvFile);
     els.importCsv.addEventListener("click", importCsv);
@@ -906,8 +922,6 @@
 
     const volumeCache = new Map();
 
-    const STRICT_ENRICH = true;
-
     async function findIssueMatch(item) {
       const seriesName = (item.series || "").trim();
       const issueNumber = (item.issue || "").trim();
@@ -919,7 +933,7 @@
         if (byVolume) return byVolume;
       }
 
-      if (STRICT_ENRICH) return null;
+      if (state.strictEnrich) return null;
 
       const queryFull = `${seriesName} ${issueNumber}`.trim();
       const querySeries = `${seriesName}`.trim();
