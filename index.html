@@ -711,27 +711,19 @@
         return;
       }
 
+      const maxBatch = 25;
+      const batch = toEnrich.slice(0, maxBatch);
+      const remaining = toEnrich.length - batch.length;
       els.enrichBtn.disabled = true;
       let enriched = 0;
       let skipped = 0;
+      let noMatch = 0;
 
-      for (const entry of toEnrich) {
+      for (const entry of batch) {
         const { item, index } = entry;
-        els.enrichStatus.textContent = `Enriching ${enriched + skipped + 1} / ${toEnrich.length}...`;
+        els.enrichStatus.textContent = `Enriching ${enriched + skipped + noMatch + 1} / ${batch.length}...`;
         try {
-          const res = await fetchComicVine("/search/", {
-            api_key: state.apiKey,
-            format: "json",
-            resources: "issue",
-            query: `${item.series} ${item.issue}`,
-            limit: "1",
-            field_list: "name,issue_number,cover_date,image,volume,description"
-          });
-          const data = await res.json();
-          if (data.error && data.error !== "OK") {
-            throw new Error(data.error);
-          }
-          const found = data.results && data.results[0];
+          const found = await findIssueMatch(item);
           if (found) {
             state.collection[index] = {
               ...item,
@@ -741,7 +733,7 @@
             };
             enriched += 1;
           } else {
-            skipped += 1;
+            noMatch += 1;
           }
         } catch (err) {
           if (String(err.message).includes("rate limit")) {
@@ -749,6 +741,7 @@
             await delay(60000);
           } else {
             skipped += 1;
+            els.enrichStatus.textContent = `Enrich error: ${err.message}`;
           }
         }
 
@@ -758,12 +751,45 @@
       storage.set("cv_collection_v1", state.collection);
       renderCollection();
       renderStats();
-      els.enrichStatus.textContent = `Enriched ${enriched}. Skipped ${skipped}.`;
+      const more = remaining > 0 ? ` ${remaining} left, run again.` : "";
+      els.enrichStatus.textContent = `Enriched ${enriched}. No match ${noMatch}. Errors ${skipped}.${more}`;
       els.enrichBtn.disabled = false;
     }
 
     function delay(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function findIssueMatch(item) {
+      const queryFull = `${item.series} ${item.issue}`.trim();
+      const querySeries = `${item.series}`.trim();
+      const params = {
+        api_key: state.apiKey,
+        format: "json",
+        resources: "issue",
+        limit: "1",
+        field_list: "name,issue_number,cover_date,image,volume,description"
+      };
+
+      if (queryFull) {
+        const resFull = await fetchComicVine("/search/", { ...params, query: queryFull });
+        const dataFull = await resFull.json();
+        if (dataFull.error && dataFull.error !== "OK") {
+          throw new Error(dataFull.error);
+        }
+        if (dataFull.results && dataFull.results[0]) return dataFull.results[0];
+      }
+
+      if (querySeries) {
+        const resSeries = await fetchComicVine("/search/", { ...params, query: querySeries });
+        const dataSeries = await resSeries.json();
+        if (dataSeries.error && dataSeries.error !== "OK") {
+          throw new Error(dataSeries.error);
+        }
+        if (dataSeries.results && dataSeries.results[0]) return dataSeries.results[0];
+      }
+
+      return null;
     }
 
     function handleCsvFile(event) {
