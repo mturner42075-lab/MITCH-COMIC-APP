@@ -9,18 +9,20 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0e1016;
+      --bg: #0b0d12;
       --panel: #141824;
       --panel-2: #1b2131;
+      --panel-3: #0f1420;
       --accent: #ff5c3a;
       --accent-2: #ffe082;
+      --accent-3: #8ad3ff;
       --text: #f4f6fb;
       --muted: #9aa4b2;
       --good: #42d392;
       --bad: #ff6b6b;
       --border: #2a3144;
       --shadow: 0 20px 50px rgba(0,0,0,0.35);
-      --radius: 14px;
+      --radius: 16px;
     }
 
     * { box-sizing: border-box; }
@@ -29,14 +31,15 @@
       font-family: "Space Grotesk", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(1200px 800px at 10% -20%, rgba(255,92,58,0.18), transparent 60%),
-        radial-gradient(900px 700px at 100% 0%, rgba(255,224,130,0.12), transparent 55%),
-        linear-gradient(180deg, #0c0f14 0%, #101521 100%);
+        radial-gradient(1200px 800px at 12% -20%, rgba(255,92,58,0.2), transparent 60%),
+        radial-gradient(1000px 700px at 100% 0%, rgba(138,211,255,0.14), transparent 55%),
+        radial-gradient(900px 900px at 50% 120%, rgba(255,224,130,0.12), transparent 60%),
+        linear-gradient(180deg, #0a0d14 0%, #101622 100%);
       min-height: 100vh;
     }
 
     header {
-      padding: 28px 24px 14px;
+      padding: 28px 24px 16px;
       display: flex;
       gap: 24px;
       align-items: center;
@@ -51,7 +54,7 @@
     }
 
     .title {
-      font-size: 28px;
+      font-size: 30px;
       font-weight: 700;
       letter-spacing: 0.5px;
     }
@@ -69,7 +72,8 @@
     }
 
     .card {
-      background: var(--panel);
+      background: linear-gradient(150deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      background-color: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 18px;
@@ -117,7 +121,7 @@
       padding: 10px 16px;
       border-radius: 12px;
       cursor: pointer;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
     }
 
     button.secondary {
@@ -147,7 +151,7 @@
       gap: 6px;
       padding: 6px 10px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.07);
       color: var(--muted);
       font-size: 12px;
     }
@@ -162,18 +166,19 @@
     }
 
     .comic {
-      background: #111624;
+      background: linear-gradient(180deg, rgba(15,20,32,0.9), rgba(10,13,20,0.95));
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 10px;
+      padding: 12px;
       display: grid;
-      grid-template-columns: 70px 1fr;
+      grid-template-columns: 90px 1fr;
       gap: 10px;
+      transition: transform 0.18s ease, border-color 0.18s ease;
     }
 
     .comic img {
-      width: 70px;
-      height: 100px;
+      width: 90px;
+      height: 130px;
       object-fit: cover;
       border-radius: 8px;
       border: 1px solid var(--border);
@@ -189,6 +194,18 @@
       color: var(--muted);
       font-size: 12px;
       line-height: 1.4;
+    }
+
+    .comic .synopsis {
+      margin-top: 6px;
+      color: #c6cfde;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .comic:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,0.18);
     }
 
     .stats {
@@ -443,13 +460,14 @@
         const card = document.createElement("div");
         card.className = "comic";
         const img = item.image?.small_url || "";
+        const synopsis = truncate(stripHtml(item.description || ""), 140);
         card.innerHTML = `
           <img src="${img}" alt="${escapeHtml(item.name || "Issue")}" />
           <div>
             <h3>${escapeHtml(item.volume?.name || item.name || "Unknown")}</h3>
             <p>Issue #${escapeHtml(item.issue_number || "?")}</p>
             <p>${escapeHtml(item.cover_date || "")}</p>
-            <p>${truncate(stripHtml(item.description || ""), 80)}</p>
+            <p class="synopsis">${synopsis ? `Synopsis: ${escapeHtml(synopsis)}` : "Synopsis: -"} </p>
             <div class="row" style="margin-top:8px;">
               <button data-add="${item.id}">Add</button>
             </div>
@@ -472,6 +490,7 @@
         issue: item.issue_number || "",
         coverDate: item.cover_date || "",
         image: item.image?.small_url || "",
+        synopsis: stripHtml(item.description || ""),
         notes: ""
       };
       state.collection.unshift(entry);
@@ -488,6 +507,7 @@
         return;
       }
       state.collection.forEach((item, index) => {
+        const synopsis = truncate(item.synopsis || item.notes || "", 140);
         const card = document.createElement("div");
         card.className = "comic";
         card.innerHTML = `
@@ -496,6 +516,7 @@
             <h3>${escapeHtml(item.series)}</h3>
             <p>Issue #${escapeHtml(item.issue || "?")}</p>
             <p>${escapeHtml(item.coverDate || "")}</p>
+            <p class="synopsis">${synopsis ? `Synopsis: ${escapeHtml(synopsis)}` : "Synopsis: -"} </p>
             <div class="row" style="margin-top:8px;">
               <button data-remove="${index}" class="secondary">Remove</button>
             </div>
@@ -597,7 +618,8 @@
           issue,
           coverDate: mapping.coverDate ? row[mapping.coverDate] : "",
           image: mapping.image ? row[mapping.image] : "",
-          notes: mapping.notes ? row[mapping.notes] : ""
+          synopsis: mapping.synopsis ? row[mapping.synopsis] : (mapping.notes ? row[mapping.notes] : ""),
+          notes: ""
         });
         added += 1;
       });
@@ -613,13 +635,13 @@
         alert("No comics to export.");
         return;
       }
-      const headers = ["Series", "Issue", "CoverDate", "Image", "Notes"];
+      const headers = ["Series", "Issue", "CoverDate", "Image", "Synopsis"];
       const rows = state.collection.map((item) => [
         escapeCsv(item.series),
         escapeCsv(item.issue),
         escapeCsv(item.coverDate),
         escapeCsv(item.image),
-        escapeCsv(item.notes)
+        escapeCsv(item.synopsis || item.notes || "")
       ]);
       const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
@@ -685,6 +707,7 @@
         issue: find("issue", "issue number", "number", "#"),
         coverDate: find("coverdate", "cover date", "date", "year"),
         image: find("image", "cover", "thumbnail", "cover url"),
+        synopsis: find("synopsis", "summary"),
         notes: find("notes", "description", "desc")
       };
     }
