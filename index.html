@@ -329,6 +329,7 @@
         </div>
         <div class="row">
           <button id="enrichBtn" class="secondary">Enrich Missing</button>
+          <button id="enrichAllBtn" class="secondary">Enrich All (Batch)</button>
         </div>
       </div>
       <div class="row" style="margin-top:10px;">
@@ -450,6 +451,7 @@
       searchStatus: document.getElementById("searchStatus"),
       collection: document.getElementById("collection"),
       enrichBtn: document.getElementById("enrichBtn"),
+      enrichAllBtn: document.getElementById("enrichAllBtn"),
       enrichStatus: document.getElementById("enrichStatus"),
       exportCsv: document.getElementById("exportCsv"),
       clearCollection: document.getElementById("clearCollection"),
@@ -502,6 +504,7 @@
       renderStats();
     });
     els.enrichBtn.addEventListener("click", () => enrichCollection());
+    els.enrichAllBtn.addEventListener("click", () => enrichAllBatches());
 
     els.csvInput.addEventListener("change", handleCsvFile);
     els.importCsv.addEventListener("click", importCsv);
@@ -737,6 +740,7 @@
       const batch = toEnrich.slice(0, maxBatch);
       const remaining = toEnrich.length - batch.length;
       els.enrichBtn.disabled = true;
+      els.enrichAllBtn.disabled = true;
       let enriched = 0;
       let skipped = 0;
       let noMatch = 0;
@@ -784,10 +788,35 @@
       const more = remaining > 0 ? ` ${remaining} left, run again.` : "";
       els.enrichStatus.textContent = `Enriched ${enriched}. No match ${noMatch}. Errors ${skipped}.${more}`;
       els.enrichBtn.disabled = false;
+      els.enrichAllBtn.disabled = false;
     }
 
     function delay(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function enrichAllBatches() {
+      if (!state.apiKey) {
+        els.enrichStatus.textContent = "Add your ComicVine API key first.";
+        return;
+      }
+      els.enrichAllBtn.disabled = true;
+      let totalRemaining = state.collection.filter((item) => !item.synopsis || !item.image).length;
+      let batchCount = 0;
+
+      while (totalRemaining > 0) {
+        batchCount += 1;
+        els.enrichStatus.textContent = `Batch ${batchCount} running...`;
+        await enrichCollection();
+        totalRemaining = state.collection.filter((item) => !item.synopsis || !item.image).length;
+        if (totalRemaining > 0) {
+          els.enrichStatus.textContent = `Batch ${batchCount} done. Waiting 3s...`;
+          await delay(3000);
+        }
+      }
+
+      els.enrichStatus.textContent = "All batches complete.";
+      els.enrichAllBtn.disabled = false;
     }
 
     const volumeCache = new Map();
@@ -874,7 +903,7 @@
         const results = data.results || [];
         if (results.length) {
           const exact = results.find((r) => normalizeIssue(r.issue_number || "") === issueKey);
-          return exact || results[0];
+          return exact || null;
         }
       }
 
