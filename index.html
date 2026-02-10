@@ -405,6 +405,14 @@
           <p class="muted" id="detailIssue"></p>
           <p class="muted" id="detailDate"></p>
           <p id="detailSynopsis" class="synopsis" style="margin-top:10px;"></p>
+          <div class="field" style="margin-top:12px;">
+            <label for="fixQuery">Fix Cover (Search)</label>
+            <input id="fixQuery" placeholder="Search ComicVine for correct issue" />
+          </div>
+          <div class="row">
+            <button id="fixSearchBtn" class="secondary">Search</button>
+          </div>
+          <div class="results" id="fixResults" style="margin-top:10px; max-height:240px;"></div>
         </div>
       </div>
     </div>
@@ -436,7 +444,8 @@
       apiKey: storage.get("cv_api_key", ""),
       collection: storage.get("cv_collection_v1", []),
       csvRows: [],
-      csvHeaders: []
+      csvHeaders: [],
+      activeIndex: null
     };
 
     const els = {
@@ -467,7 +476,10 @@
       detailTitle: document.getElementById("detailTitle"),
       detailIssue: document.getElementById("detailIssue"),
       detailDate: document.getElementById("detailDate"),
-      detailSynopsis: document.getElementById("detailSynopsis")
+      detailSynopsis: document.getElementById("detailSynopsis"),
+      fixQuery: document.getElementById("fixQuery"),
+      fixSearchBtn: document.getElementById("fixSearchBtn"),
+      fixResults: document.getElementById("fixResults")
     };
 
     els.apiKey.value = state.apiKey;
@@ -520,6 +532,7 @@
     els.detailModal.addEventListener("click", (event) => {
       if (event.target.dataset.close) closeModal();
     });
+    els.fixSearchBtn.addEventListener("click", () => searchFixResults());
 
     async function searchIssues() {
       if (!state.apiKey) {
@@ -677,12 +690,15 @@
     }
 
     function openModal(item) {
+      state.activeIndex = state.collection.findIndex((c) => c.id === item.id);
       els.detailCover.src = item.image || "";
       els.detailTitle.textContent = item.series || "Unknown";
       els.detailIssue.textContent = `Issue #${item.issue || "?"}`;
       els.detailDate.textContent = item.coverDate || "";
       const fullSynopsis = item.synopsis || item.notes || "No synopsis available.";
       els.detailSynopsis.textContent = fullSynopsis;
+      els.fixQuery.value = `${item.series || ""} ${item.issue || ""}`.trim();
+      els.fixResults.innerHTML = "";
       els.detailModal.classList.add("active");
       els.detailModal.setAttribute("aria-hidden", "false");
     }
@@ -690,6 +706,75 @@
     function closeModal() {
       els.detailModal.classList.remove("active");
       els.detailModal.setAttribute("aria-hidden", "true");
+    }
+
+    async function searchFixResults() {
+      if (!state.apiKey) {
+        els.enrichStatus.textContent = "Add your ComicVine API key first.";
+        return;
+      }
+      const query = els.fixQuery.value.trim();
+      if (!query) return;
+
+      els.fixResults.innerHTML = "<p class='muted'>Searching...</p>";
+      try {
+        const res = await fetchComicVine("/search/", {
+          api_key: state.apiKey,
+          format: "json",
+          resources: "issue",
+          query,
+          limit: "10",
+          field_list: "name,issue_number,cover_date,image,volume,description"
+        });
+        const data = await res.json();
+        if (data.error && data.error !== "OK") {
+          throw new Error(data.error);
+        }
+        renderFixResults(data.results || []);
+      } catch (err) {
+        els.fixResults.innerHTML = `<p class='bad'>Search failed: ${err.message}</p>`;
+      }
+    }
+
+    function renderFixResults(results) {
+      if (!results.length) {
+        els.fixResults.innerHTML = "<p class='muted'>No results.</p>";
+        return;
+      }
+      els.fixResults.innerHTML = "";
+      results.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "comic";
+        const img = item.image?.small_url || "";
+        card.innerHTML = `
+          <img src="${img}" alt="${escapeHtml(item.name || "Issue")}" />
+          <div>
+            <h3>${escapeHtml(item.volume?.name || item.name || "Unknown")}</h3>
+            <p>Issue #${escapeHtml(item.issue_number || "?")}</p>
+            <p>${escapeHtml(item.cover_date || "")}</p>
+            <div class="row" style="margin-top:8px;">
+              <button data-pick="true">Use This</button>
+            </div>
+          </div>
+        `;
+        card.querySelector("button").addEventListener("click", () => applyFixResult(item));
+        els.fixResults.appendChild(card);
+      });
+    }
+
+    function applyFixResult(item) {
+      if (state.activeIndex == null || state.activeIndex < 0) return;
+      const current = state.collection[state.activeIndex];
+      state.collection[state.activeIndex] = {
+        ...current,
+        image: item.image?.small_url || current.image || "",
+        coverDate: item.cover_date || current.coverDate || "",
+        synopsis: stripHtml(item.description || "") || current.synopsis || ""
+      };
+      storage.set("cv_collection_v1", state.collection);
+      renderCollection();
+      renderStats();
+      openModal(state.collection[state.activeIndex]);
     }
 
     async function fetchComicVine(path, params) {
