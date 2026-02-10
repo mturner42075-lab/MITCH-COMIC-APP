@@ -747,10 +747,14 @@
         try {
           const found = await findIssueMatch(item);
           if (found) {
+            const foundYear = extractYear(found.cover_date || "");
+            const currentYear = extractYear(item.coverDate || "");
             state.collection[index] = {
               ...item,
               image: item.image || found.image?.small_url || "",
-              coverDate: item.coverDate || found.cover_date || "",
+              coverDate: (!currentYear || (foundYear && Math.abs(foundYear - currentYear) > 5))
+                ? (found.cover_date || item.coverDate || "")
+                : item.coverDate,
               synopsis: item.synopsis || stripHtml(found.description || "")
             };
             enriched += 1;
@@ -848,21 +852,28 @@
     async function findIssueByVolume(volume, issueNumber) {
       if (!volume || !volume.id) return null;
       const issueKey = normalizeIssue(issueNumber);
-      const res = await fetchComicVine("/issues/", {
-        api_key: state.apiKey,
-        format: "json",
-        filter: `volume:${volume.id},issue_number:${issueNumber}`,
-        field_list: "name,issue_number,cover_date,image,volume,description",
-        limit: "5"
-      });
-      const data = await res.json();
-      if (data.error && data.error !== "OK") {
-        throw new Error(data.error);
+      const variants = uniqueIssueVariants(issueNumber);
+
+      for (const variant of variants) {
+        const res = await fetchComicVine("/issues/", {
+          api_key: state.apiKey,
+          format: "json",
+          filter: `volume:${volume.id},issue_number:${variant}`,
+          field_list: "name,issue_number,cover_date,image,volume,description",
+          limit: "5"
+        });
+        const data = await res.json();
+        if (data.error && data.error !== "OK") {
+          throw new Error(data.error);
+        }
+        const results = data.results || [];
+        if (results.length) {
+          const exact = results.find((r) => normalizeIssue(r.issue_number || "") === issueKey);
+          return exact || results[0];
+        }
       }
-      const results = data.results || [];
-      if (!results.length) return null;
-      const exact = results.find((r) => normalizeIssue(r.issue_number || "") === issueKey);
-      return exact || results[0];
+
+      return null;
     }
 
     function pickBestMatch(item, results) {
@@ -894,7 +905,7 @@
     function pickBestVolume(seriesName, coverDate, results) {
       if (!results.length) return null;
       const targetSeries = normalizeSeries(seriesName);
-      const targetYear = (coverDate || "").slice(0, 4);
+      const targetYear = extractYear(coverDate);
       let best = null;
       let bestScore = -1;
 
@@ -903,7 +914,13 @@
         let score = 0;
         if (series === targetSeries) score += 8;
         if (series.includes(targetSeries) || targetSeries.includes(series)) score += 2;
-        if (targetYear && r.start_year && String(r.start_year) === targetYear) score += 3;
+        if (targetYear && r.start_year) {
+          const diff = Math.abs(Number(r.start_year) - targetYear);
+          if (diff <= 1) score += 3;
+          else if (diff <= 3) score += 2;
+          else if (diff <= 5) score += 1;
+          else if (diff >= 15) score -= 2;
+        }
         if (score > bestScore) {
           bestScore = score;
           best = r;
@@ -927,6 +944,20 @@
         .toLowerCase()
         .replace(/[^0-9a-z]+/g, "")
         .trim();
+    }
+
+    function uniqueIssueVariants(value) {
+      const raw = String(value || "").trim();
+      const normalized = normalizeIssue(raw);
+      const numeric = normalized.replace(/[a-z]+/g, "");
+      const variants = [raw, normalized, numeric].filter((v) => v && v.length);
+      return Array.from(new Set(variants));
+    }
+
+    function extractYear(value) {
+      const year = Number(String(value || "").slice(0, 4));
+      if (year >= 1930 && year <= new Date().getFullYear()) return year;
+      return null;
     }
 
     function handleCsvFile(event) {
