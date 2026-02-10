@@ -782,9 +782,21 @@
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    const volumeCache = new Map();
+
     async function findIssueMatch(item) {
-      const queryFull = `${item.series} ${item.issue}`.trim();
-      const querySeries = `${item.series}`.trim();
+      const seriesName = (item.series || "").trim();
+      const issueNumber = (item.issue || "").trim();
+      if (!seriesName || !issueNumber) return null;
+
+      const volume = await findVolumeMatch(seriesName, item.coverDate || "");
+      if (volume) {
+        const byVolume = await findIssueByVolume(volume, issueNumber);
+        if (byVolume) return byVolume;
+      }
+
+      const queryFull = `${seriesName} ${issueNumber}`.trim();
+      const querySeries = `${seriesName}`.trim();
       const params = {
         api_key: state.apiKey,
         format: "json",
@@ -811,6 +823,48 @@
       return null;
     }
 
+    async function findVolumeMatch(seriesName, coverDate) {
+      const cacheKey = `${seriesName}::${coverDate || ""}`;
+      if (volumeCache.has(cacheKey)) return volumeCache.get(cacheKey);
+
+      const res = await fetchComicVine("/search/", {
+        api_key: state.apiKey,
+        format: "json",
+        resources: "volume",
+        query: seriesName,
+        limit: "10",
+        field_list: "id,name,start_year,publisher"
+      });
+      const data = await res.json();
+      if (data.error && data.error !== "OK") {
+        throw new Error(data.error);
+      }
+      const results = data.results || [];
+      const best = pickBestVolume(seriesName, coverDate, results);
+      volumeCache.set(cacheKey, best);
+      return best;
+    }
+
+    async function findIssueByVolume(volume, issueNumber) {
+      if (!volume || !volume.id) return null;
+      const issueKey = normalizeIssue(issueNumber);
+      const res = await fetchComicVine("/issues/", {
+        api_key: state.apiKey,
+        format: "json",
+        filter: `volume:${volume.id},issue_number:${issueNumber}`,
+        field_list: "name,issue_number,cover_date,image,volume,description",
+        limit: "5"
+      });
+      const data = await res.json();
+      if (data.error && data.error !== "OK") {
+        throw new Error(data.error);
+      }
+      const results = data.results || [];
+      if (!results.length) return null;
+      const exact = results.find((r) => normalizeIssue(r.issue_number || "") === issueKey);
+      return exact || results[0];
+    }
+
     function pickBestMatch(item, results) {
       if (!results.length) return null;
       const targetSeries = normalizeSeries(item.series || "");
@@ -823,11 +877,33 @@
         const issue = normalizeIssue(r.issue_number || "");
         let score = 0;
 
-        if (series === targetSeries) score += 6;
-        if (issue && issue === targetIssue) score += 6;
+        if (series === targetSeries) score += 8;
+        if (issue && issue === targetIssue) score += 8;
         if (series.includes(targetSeries) || targetSeries.includes(series)) score += 2;
-        if (issue && targetIssue && issue[0] === targetIssue[0]) score += 1;
+        if (issue && targetIssue && (issue.startsWith(targetIssue) || targetIssue.startsWith(issue))) score += 2;
 
+        if (score > bestScore) {
+          bestScore = score;
+          best = r;
+        }
+      }
+
+      return bestScore >= 8 ? best : null;
+    }
+
+    function pickBestVolume(seriesName, coverDate, results) {
+      if (!results.length) return null;
+      const targetSeries = normalizeSeries(seriesName);
+      const targetYear = (coverDate || "").slice(0, 4);
+      let best = null;
+      let bestScore = -1;
+
+      for (const r of results) {
+        const series = normalizeSeries(r.name || "");
+        let score = 0;
+        if (series === targetSeries) score += 8;
+        if (series.includes(targetSeries) || targetSeries.includes(series)) score += 2;
+        if (targetYear && r.start_year && String(r.start_year) === targetYear) score += 3;
         if (score > bestScore) {
           bestScore = score;
           best = r;
