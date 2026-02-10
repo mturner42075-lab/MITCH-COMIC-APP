@@ -80,6 +80,12 @@
       box-shadow: var(--shadow);
     }
 
+    .collection-card {
+      grid-column: 1 / -1;
+      background: linear-gradient(140deg, rgba(255,92,58,0.14), rgba(15,20,32,0.8));
+      border-color: rgba(255,255,255,0.14);
+    }
+
     .card h2 {
       margin: 0 0 12px;
       font-size: 18px;
@@ -184,6 +190,17 @@
       border: 1px solid var(--border);
     }
 
+    .collection .comic {
+      grid-template-columns: 60px 1fr;
+    }
+
+    .collection .comic img {
+      width: 60px;
+      height: 88px;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+    }
+
     .comic h3 {
       margin: 0 0 6px;
       font-size: 14px;
@@ -206,6 +223,54 @@
     .comic:hover {
       transform: translateY(-2px);
       border-color: rgba(255,255,255,0.18);
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+
+    .modal.active { display: flex; }
+
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(6,8,12,0.75);
+      backdrop-filter: blur(6px);
+    }
+
+    .modal-card {
+      position: relative;
+      z-index: 2;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      width: min(900px, 92vw);
+      box-shadow: var(--shadow);
+    }
+
+    .modal-content {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 18px;
+      margin-top: 12px;
+    }
+
+    .modal-content img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    @media (max-width: 720px) {
+      .modal-content {
+        grid-template-columns: 1fr;
+      }
     }
 
     .stats {
@@ -256,6 +321,24 @@
   </header>
 
   <main class="grid">
+    <section class="card collection-card">
+      <div class="row" style="justify-content: space-between; align-items: flex-end;">
+        <div>
+          <h2 style="margin-bottom:4px;">Your Collection</h2>
+          <p class="muted" style="margin:0;">Tap a cover to open a full synopsis + large cover.</p>
+        </div>
+        <div class="row">
+          <button id="enrichBtn" class="secondary">Enrich Missing</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="exportCsv">Export CSV</button>
+        <button id="clearCollection" class="secondary">Clear Collection</button>
+      </div>
+      <p class="status" id="enrichStatus">Ready.</p>
+      <div class="collection" id="collection"></div>
+    </section>
+
     <section class="card">
       <h2>API Setup</h2>
       <div class="field">
@@ -285,15 +368,6 @@
     </section>
 
     <section class="card">
-      <h2>Your Collection</h2>
-      <div class="row">
-        <button id="exportCsv">Export CSV</button>
-        <button id="clearCollection" class="secondary">Clear Collection</button>
-      </div>
-      <div class="collection" id="collection"></div>
-    </section>
-
-    <section class="card">
       <h2>Import CSV</h2>
       <div class="field">
         <label for="csvInput">CSV File</label>
@@ -315,6 +389,25 @@
       <div class="stats" id="stats"></div>
     </section>
   </main>
+
+  <div class="modal" id="detailModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-card">
+      <div class="row" style="justify-content: space-between; align-items: center;">
+        <div class="title" style="font-size:20px;">Comic Details</div>
+        <button id="closeModal" class="secondary">Close</button>
+      </div>
+      <div class="modal-content">
+        <img id="detailCover" alt="Cover" />
+        <div>
+          <h3 id="detailTitle" style="margin-top:0;"></h3>
+          <p class="muted" id="detailIssue"></p>
+          <p class="muted" id="detailDate"></p>
+          <p id="detailSynopsis" class="synopsis" style="margin-top:10px;"></p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <footer>
     Built to keep it simple. Data is stored only in your browser (localStorage).
@@ -356,6 +449,8 @@
       results: document.getElementById("results"),
       searchStatus: document.getElementById("searchStatus"),
       collection: document.getElementById("collection"),
+      enrichBtn: document.getElementById("enrichBtn"),
+      enrichStatus: document.getElementById("enrichStatus"),
       exportCsv: document.getElementById("exportCsv"),
       clearCollection: document.getElementById("clearCollection"),
       csvInput: document.getElementById("csvInput"),
@@ -363,7 +458,14 @@
       importCsv: document.getElementById("importCsv"),
       resetImport: document.getElementById("resetImport"),
       importStatus: document.getElementById("importStatus"),
-      stats: document.getElementById("stats")
+      stats: document.getElementById("stats"),
+      detailModal: document.getElementById("detailModal"),
+      closeModal: document.getElementById("closeModal"),
+      detailCover: document.getElementById("detailCover"),
+      detailTitle: document.getElementById("detailTitle"),
+      detailIssue: document.getElementById("detailIssue"),
+      detailDate: document.getElementById("detailDate"),
+      detailSynopsis: document.getElementById("detailSynopsis")
     };
 
     els.apiKey.value = state.apiKey;
@@ -399,6 +501,7 @@
       renderCollection();
       renderStats();
     });
+    els.enrichBtn.addEventListener("click", () => enrichCollection());
 
     els.csvInput.addEventListener("change", handleCsvFile);
     els.importCsv.addEventListener("click", importCsv);
@@ -408,6 +511,11 @@
       state.csvRows = [];
       state.csvHeaders = [];
       els.importStatus.textContent = "Waiting for CSV.";
+    });
+
+    els.closeModal.addEventListener("click", closeModal);
+    els.detailModal.addEventListener("click", (event) => {
+      if (event.target.dataset.close) closeModal();
     });
 
     async function searchIssues() {
@@ -424,20 +532,15 @@
       els.searchStatus.textContent = "Searching...";
       els.results.innerHTML = "";
 
-      const base = "https://comicvine.gamespot.com/api";
-      const params = new URLSearchParams({
-        api_key: state.apiKey,
-        format: "json",
-        resources: "issue",
-        query,
-        limit: "20",
-        field_list: "id,name,issue_number,cover_date,image,volume,description"
-      });
-      const targetUrl = `${base}/search/?${params.toString()}`;
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
       try {
-        const res = await fetch(proxyUrl);
+        const res = await fetchComicVine("/search/", {
+          api_key: state.apiKey,
+          format: "json",
+          resources: "issue",
+          query,
+          limit: "20",
+          field_list: "id,name,issue_number,cover_date,image,volume,description"
+        });
         const data = await res.json();
         if (data.error && data.error !== "OK") {
           throw new Error(data.error);
@@ -522,6 +625,7 @@
             </div>
           </div>
         `;
+        card.querySelector("img").addEventListener("click", () => openModal(item));
         card.querySelector("button").addEventListener("click", () => {
           state.collection.splice(index, 1);
           storage.set("cv_collection_v1", state.collection);
@@ -567,6 +671,99 @@
         els.apiStatus.textContent = "Waiting for API key.";
         els.apiStatus.className = "status";
       }
+    }
+
+    function openModal(item) {
+      els.detailCover.src = item.image || "";
+      els.detailTitle.textContent = item.series || "Unknown";
+      els.detailIssue.textContent = `Issue #${item.issue || "?"}`;
+      els.detailDate.textContent = item.coverDate || "";
+      const fullSynopsis = item.synopsis || item.notes || "No synopsis available.";
+      els.detailSynopsis.textContent = fullSynopsis;
+      els.detailModal.classList.add("active");
+      els.detailModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeModal() {
+      els.detailModal.classList.remove("active");
+      els.detailModal.setAttribute("aria-hidden", "true");
+    }
+
+    async function fetchComicVine(path, params) {
+      const base = "https://comicvine.gamespot.com/api";
+      const url = `${base}${path}?${new URLSearchParams(params).toString()}`;
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      return await fetch(proxyUrl);
+    }
+
+    async function enrichCollection() {
+      if (!state.apiKey) {
+        els.enrichStatus.textContent = "Add your ComicVine API key first.";
+        return;
+      }
+
+      const toEnrich = state.collection
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => !item.synopsis || !item.image);
+
+      if (!toEnrich.length) {
+        els.enrichStatus.textContent = "Nothing to enrich.";
+        return;
+      }
+
+      els.enrichBtn.disabled = true;
+      let enriched = 0;
+      let skipped = 0;
+
+      for (const entry of toEnrich) {
+        const { item, index } = entry;
+        els.enrichStatus.textContent = `Enriching ${enriched + skipped + 1} / ${toEnrich.length}...`;
+        try {
+          const res = await fetchComicVine("/search/", {
+            api_key: state.apiKey,
+            format: "json",
+            resources: "issue",
+            query: `${item.series} ${item.issue}`,
+            limit: "1",
+            field_list: "name,issue_number,cover_date,image,volume,description"
+          });
+          const data = await res.json();
+          if (data.error && data.error !== "OK") {
+            throw new Error(data.error);
+          }
+          const found = data.results && data.results[0];
+          if (found) {
+            state.collection[index] = {
+              ...item,
+              image: item.image || found.image?.small_url || "",
+              coverDate: item.coverDate || found.cover_date || "",
+              synopsis: item.synopsis || stripHtml(found.description || "")
+            };
+            enriched += 1;
+          } else {
+            skipped += 1;
+          }
+        } catch (err) {
+          if (String(err.message).includes("rate limit")) {
+            els.enrichStatus.textContent = "Hit API limit. Waiting 60s...";
+            await delay(60000);
+          } else {
+            skipped += 1;
+          }
+        }
+
+        await delay(1200);
+      }
+
+      storage.set("cv_collection_v1", state.collection);
+      renderCollection();
+      renderStats();
+      els.enrichStatus.textContent = `Enriched ${enriched}. Skipped ${skipped}.`;
+      els.enrichBtn.disabled = false;
+    }
+
+    function delay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     function handleCsvFile(event) {
