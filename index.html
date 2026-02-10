@@ -906,6 +906,8 @@
 
     const volumeCache = new Map();
 
+    const STRICT_ENRICH = true;
+
     async function findIssueMatch(item) {
       const seriesName = (item.series || "").trim();
       const issueNumber = (item.issue || "").trim();
@@ -916,6 +918,8 @@
         const byVolume = await findIssueByVolume(volume, issueNumber);
         if (byVolume) return byVolume;
       }
+
+      if (STRICT_ENRICH) return null;
 
       const queryFull = `${seriesName} ${issueNumber}`.trim();
       const querySeries = `${seriesName}`.trim();
