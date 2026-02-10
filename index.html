@@ -749,6 +749,10 @@
           if (found) {
             const foundYear = extractYear(found.cover_date || "");
             const currentYear = extractYear(item.coverDate || "");
+            if (currentYear && foundYear && Math.abs(foundYear - currentYear) > 5) {
+              noMatch += 1;
+              continue;
+            }
             state.collection[index] = {
               ...item,
               image: item.image || found.image?.small_url || "",
@@ -831,11 +835,12 @@
       const cacheKey = `${seriesName}::${coverDate || ""}`;
       if (volumeCache.has(cacheKey)) return volumeCache.get(cacheKey);
 
+      const cleanedSeries = stripVolumeSuffix(seriesName);
       const res = await fetchComicVine("/search/", {
         api_key: state.apiKey,
         format: "json",
         resources: "volume",
-        query: seriesName,
+        query: cleanedSeries || seriesName,
         limit: "10",
         field_list: "id,name,start_year,publisher"
       });
@@ -906,14 +911,26 @@
       if (!results.length) return null;
       const targetSeries = normalizeSeries(seriesName);
       const targetYear = extractYear(coverDate);
+      const targetVol = extractVolumeNumber(seriesName);
       let best = null;
       let bestScore = -1;
 
-      for (const r of results) {
+      const ordered = [...results].sort((a, b) => {
+        const aYear = Number(a.start_year || 9999);
+        const bYear = Number(b.start_year || 9999);
+        return aYear - bYear;
+      });
+
+      for (const [index, r] of ordered.entries()) {
         const series = normalizeSeries(r.name || "");
         let score = 0;
         if (series === targetSeries) score += 8;
         if (series.includes(targetSeries) || targetSeries.includes(series)) score += 2;
+        if (targetVol) {
+          const expectedIndex = targetVol - 1;
+          if (expectedIndex === index) score += 4;
+          else if (Math.abs(expectedIndex - index) === 1) score += 2;
+        }
         if (targetYear && r.start_year) {
           const diff = Math.abs(Number(r.start_year) - targetYear);
           if (diff <= 1) score += 3;
@@ -952,6 +969,15 @@
       const numeric = normalized.replace(/[a-z]+/g, "");
       const variants = [raw, normalized, numeric].filter((v) => v && v.length);
       return Array.from(new Set(variants));
+    }
+
+    function stripVolumeSuffix(value) {
+      return String(value || "").replace(/\bvol\.?\s*\d+\b/ig, "").trim();
+    }
+
+    function extractVolumeNumber(value) {
+      const match = String(value || "").match(/\bvol\.?\s*(\d+)\b/i);
+      return match ? Number(match[1]) : null;
     }
 
     function extractYear(value) {
